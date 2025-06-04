@@ -1,0 +1,29 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - run: git clone --depth 1 --branch ${{ github.ref_name }} https://github.com/florisboard/florisboard.git
+      - run: cd florisboard && git apply ../0001-add-shared-clipboard-integration.patch
+      - run: cd florisboard && ./gradlew assembleDebug
+
+      - uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          removeArtifacts: true
+          tag: ${{ github.ref_name }}
+          name: "FlorisBoard Patched - ${{ github.ref_name }}"
+          artifacts: "florisboard/app/build/outputs/apk/debug/app-debug.apk"
