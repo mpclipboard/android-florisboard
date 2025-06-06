@@ -1,4 +1,4 @@
-From 96feca3041f02dde86e5bf908a6a9bffc67aaf15 Mon Sep 17 00:00:00 2001
+From 9dbfccd987ba025e0a1328063829d416dfb2e914 Mon Sep 17 00:00:00 2001
 From: Ilya Bylich <ibylich@gmail.com>
 Date: Wed, 4 Jun 2025 18:10:51 +0200
 Subject: [PATCH] add shared clipboard integration
@@ -16,7 +16,7 @@ Subject: [PATCH] add shared clipboard integration
  create mode 100644 app/src/main/kotlin/dev/patrickgold/florisboard/app/settings/sharedclipboard/SharedClipboardScreen.kt
 
 diff --git a/app/build.gradle.kts b/app/build.gradle.kts
-index a45013c..5d2b7eb 100644
+index a45013c..9c4a394 100644
 --- a/app/build.gradle.kts
 +++ b/app/build.gradle.kts
 @@ -215,6 +215,8 @@ dependencies {
@@ -24,7 +24,7 @@ index a45013c..5d2b7eb 100644
      androidTestImplementation(libs.androidx.test.ext)
      androidTestImplementation(libs.androidx.test.espresso.core)
 +
-+    implementation(libs.shared.clipboard.client.android)
++    implementation(libs.mpclipboard.android)
  }
  
  fun getGitCommitHash(short: Boolean = false): String {
@@ -41,7 +41,7 @@ index 0abe127..b5db21b 100644
      <!-- Permission needed to create notifications on devices running Android 13+ -->
      <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 diff --git a/app/src/main/kotlin/dev/patrickgold/florisboard/FlorisImeService.kt b/app/src/main/kotlin/dev/patrickgold/florisboard/FlorisImeService.kt
-index a090117..8cd0d81 100644
+index a090117..1d3bfad 100644
 --- a/app/src/main/kotlin/dev/patrickgold/florisboard/FlorisImeService.kt
 +++ b/app/src/main/kotlin/dev/patrickgold/florisboard/FlorisImeService.kt
 @@ -16,6 +16,8 @@
@@ -57,7 +57,7 @@ index a090117..8cd0d81 100644
  import androidx.compose.ui.viewinterop.AndroidView
  import androidx.core.view.WindowCompat
  import androidx.lifecycle.lifecycleScope
-+import com.example.shared_clipboard_lib.SharedClipboard
++import org.mpclipboard.mpclipboard.MPClipboard
  import dev.patrickgold.florisboard.app.FlorisAppActivity
  import dev.patrickgold.florisboard.app.devtools.DevtoolsOverlay
  import dev.patrickgold.florisboard.app.florisPreferenceModel
@@ -70,7 +70,7 @@ index a090117..8cd0d81 100644
 +        val text = clipboardManager.primaryClip?.getItemAt(0)?.text?.toString()
 +        if (text != null) {
 +            flogInfo { "New text from local keyboard: $text" }
-+            SharedClipboard.send(text)
++            MPClipboard.send(text)
 +        }
 +    }
 +
@@ -85,8 +85,8 @@ index a090117..8cd0d81 100644
 +        clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 +        clipboardManager.addPrimaryClipChangedListener(listener)
 +
-+        SharedClipboard.reconfigure(this, "android-florisboard-ime")
-+        SharedClipboard.startPolling(
++        MPClipboard.reconfigure(this, "android-florisboard-ime")
++        MPClipboard.startPolling(
 +            onConnectivityChanged = {},
 +            onClipboardChanged = { text ->
 +                flogInfo { "New text from server: $text" }
@@ -102,8 +102,8 @@ index a090117..8cd0d81 100644
          inputWindowView = null
 +
 +        clipboardManager.removePrimaryClipChangedListener(listener)
-+        SharedClipboard.stopPolling()
-+        SharedClipboard.stop()
++        MPClipboard.stopPolling()
++        MPClipboard.stop()
      }
  
      override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
@@ -160,15 +160,15 @@ index e7ac8a7..fe47908 100644
  }
 diff --git a/app/src/main/kotlin/dev/patrickgold/florisboard/app/settings/sharedclipboard/SharedClipboardScreen.kt b/app/src/main/kotlin/dev/patrickgold/florisboard/app/settings/sharedclipboard/SharedClipboardScreen.kt
 new file mode 100644
-index 0000000..66ca269
+index 0000000..3530542
 --- /dev/null
 +++ b/app/src/main/kotlin/dev/patrickgold/florisboard/app/settings/sharedclipboard/SharedClipboardScreen.kt
 @@ -0,0 +1,14 @@
 +package dev.patrickgold.florisboard.app.settings.sharedclipboard
 +
 +import androidx.compose.runtime.Composable
-+import com.example.shared_clipboard_lib.SettingsScreen
 +import dev.patrickgold.florisboard.lib.compose.FlorisScreen
++import org.mpclipboard.mpclipboard.SettingsScreen
 +
 +@Composable
 +fun SharedClipboardScreen() = FlorisScreen {
@@ -179,25 +179,25 @@ index 0000000..66ca269
 +    }
 +}
 diff --git a/gradle/libs.versions.toml b/gradle/libs.versions.toml
-index 1336835..247bd84 100644
+index 1336835..cb7a695 100644
 --- a/gradle/libs.versions.toml
 +++ b/gradle/libs.versions.toml
-@@ -32,6 +32,7 @@ androidx-test-uiautomator = "2.3.0"
- equalsverifier = "3.10"
- kotest = "5.4.0"
- kotest-extensions-roboelectric = "0.5.0"
-+shared-clipboard-client-android = "v1.0.4"
+@@ -21,6 +21,7 @@ kotlinx-serialization-json = "1.6.3"
+ ksp = "2.0.20-1.0.25"
+ mannodermaus-android-junit5 = "1.10.0.0"
+ mikepenz-aboutlibraries = "10.10.0"
++mpclipboard-android = "0.1.0"
+ patrickgold-compose-tooltip = "0.1.0"
+ patrickgold-jetpref = "0.2.0-rc01"
  
- [libraries]
- # Main
-@@ -73,6 +74,7 @@ kotest-assertions-core = { module = "io.kotest:kotest-assertions-core", version.
- kotest-extensions-roboelectric = { module = "io.kotest.extensions:kotest-extensions-robolectric", version.ref = "kotest-extensions-roboelectric" }
- kotest-property = { module = "io.kotest:kotest-property", version.ref = "kotest" }
- kotest-runner-junit5 = { module = "io.kotest:kotest-runner-junit5", version.ref = "kotest" }
-+shared-clipboard-client-android = { module = "com.github.iliabylich:shared-clipboard-client-android", version.ref = "shared-clipboard-client-android" }
- 
- [plugins]
- # Main
+@@ -58,6 +59,7 @@ kotlinx-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-androi
+ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
+ mikepenz-aboutlibraries-core = { module = "com.mikepenz:aboutlibraries-core", version.ref = "mikepenz-aboutlibraries" }
+ mikepenz-aboutlibraries-compose = { module = "com.mikepenz:aboutlibraries-compose-m3", version.ref = "mikepenz-aboutlibraries" }
++mpclipboard-android = { module = "com.github.mpclipboard:mpclipboard-android", version.ref = "mpclipboard-android" }
+ patrickgold-compose-tooltip = { module = "dev.patrickgold.compose.tooltip:tooltip", version.ref = "patrickgold-compose-tooltip" }
+ patrickgold-jetpref-datastore-model = { module = "dev.patrickgold.jetpref:jetpref-datastore-model", version.ref = "patrickgold-jetpref" }
+ patrickgold-jetpref-datastore-ui = { module = "dev.patrickgold.jetpref:jetpref-datastore-ui", version.ref = "patrickgold-jetpref" }
 diff --git a/settings.gradle.kts b/settings.gradle.kts
 index 9dd2aea..71b5a28 100644
 --- a/settings.gradle.kts
