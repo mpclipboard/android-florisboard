@@ -1,19 +1,23 @@
-From 9dbfccd987ba025e0a1328063829d416dfb2e914 Mon Sep 17 00:00:00 2001
+From b9ceb01f0cf028110db5a16e11882972a46e0a34 Mon Sep 17 00:00:00 2001
 From: Ilya Bylich <ibylich@gmail.com>
-Date: Wed, 4 Jun 2025 18:10:51 +0200
-Subject: [PATCH] add shared clipboard integration
+Date: Tue, 10 Jun 2025 18:46:15 +0200
+Subject: [PATCH] integrate mpclipboard
 
 ---
  app/build.gradle.kts                          |  2 ++
- app/src/main/AndroidManifest.xml              |  1 +
- .../florisboard/FlorisImeService.kt           | 28 +++++++++++++++++++
+ app/src/main/AndroidManifest.xml              | 16 +++++++++
+ .../florisboard/FlorisImeService.kt           | 35 +++++++++++++++++++
  .../dev/patrickgold/florisboard/app/Routes.kt |  3 ++
  .../florisboard/app/settings/HomeScreen.kt    |  6 ++++
- .../sharedclipboard/SharedClipboardScreen.kt  | 14 ++++++++++
+ .../sharedclipboard/SharedClipboardScreen.kt  | 14 ++++++++
+ app/src/main/res/layout/placeholder.xml       |  5 +++
+ .../main/res/xml/connectivity_widget_info.xml |  8 +++++
  gradle/libs.versions.toml                     |  2 ++
  settings.gradle.kts                           |  1 +
- 8 files changed, 57 insertions(+)
+ 10 files changed, 92 insertions(+)
  create mode 100644 app/src/main/kotlin/dev/patrickgold/florisboard/app/settings/sharedclipboard/SharedClipboardScreen.kt
+ create mode 100644 app/src/main/res/layout/placeholder.xml
+ create mode 100644 app/src/main/res/xml/connectivity_widget_info.xml
 
 diff --git a/app/build.gradle.kts b/app/build.gradle.kts
 index a45013c..9c4a394 100644
@@ -29,19 +33,41 @@ index a45013c..9c4a394 100644
  
  fun getGitCommitHash(short: Boolean = false): String {
 diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
-index 0abe127..b5db21b 100644
+index 0abe127..340a46a 100644
 --- a/app/src/main/AndroidManifest.xml
 +++ b/app/src/main/AndroidManifest.xml
-@@ -4,6 +4,7 @@
- 
+@@ -5,6 +5,9 @@
      <!-- Permission needed to vibrate if the user has key press vibration enabled -->
      <uses-permission android:name="android.permission.VIBRATE"/>
-+    <uses-permission android:name="android.permission.INTERNET"/>
  
++    <!-- Permission needed for mpclipboard -->
++    <uses-permission android:name="android.permission.INTERNET"/>
++
      <!-- Permission needed to create notifications on devices running Android 13+ -->
      <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+ 
+@@ -62,6 +65,19 @@
+             <meta-data android:name="android.view.textservice.scs" android:resource="@xml/spellchecker"/>
+         </service>
+ 
++        <receiver
++            android:name="org.mpclipboard.mpclipboard.ConnectivityWidgetReceiver"
++            android:exported="true">
++            <intent-filter>
++                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
++                <action android:name="org.florisboard.CONNECTIVITY_STATUS_CHANGED" />
++            </intent-filter>
++
++            <meta-data
++                android:name="android.appwidget.provider"
++                android:resource="@xml/connectivity_widget_info" />
++        </receiver>
++
+         <!-- Main App Activity -->
+         <activity
+             android:name="dev.patrickgold.florisboard.app.FlorisAppActivity"
 diff --git a/app/src/main/kotlin/dev/patrickgold/florisboard/FlorisImeService.kt b/app/src/main/kotlin/dev/patrickgold/florisboard/FlorisImeService.kt
-index a090117..1d3bfad 100644
+index a090117..0b11047 100644
 --- a/app/src/main/kotlin/dev/patrickgold/florisboard/FlorisImeService.kt
 +++ b/app/src/main/kotlin/dev/patrickgold/florisboard/FlorisImeService.kt
 @@ -16,6 +16,8 @@
@@ -61,7 +87,15 @@ index a090117..1d3bfad 100644
  import dev.patrickgold.florisboard.app.FlorisAppActivity
  import dev.patrickgold.florisboard.app.devtools.DevtoolsOverlay
  import dev.patrickgold.florisboard.app.florisPreferenceModel
-@@ -277,6 +280,15 @@ class FlorisImeService : LifecycleInputMethodService() {
+@@ -129,6 +132,7 @@ import org.florisboard.lib.snygg.ui.snyggBorder
+ import org.florisboard.lib.snygg.ui.snyggShadow
+ import org.florisboard.lib.snygg.ui.solidColor
+ import org.florisboard.lib.snygg.ui.spSize
++import org.mpclipboard.mpclipboard.ConnectivityWidget
+ import java.lang.ref.WeakReference
+ 
+ /**
+@@ -277,6 +281,15 @@ class FlorisImeService : LifecycleInputMethodService() {
          setTheme(R.style.FlorisImeTheme)
      }
  
@@ -77,7 +111,7 @@ index a090117..1d3bfad 100644
      override fun onCreate() {
          super.onCreate()
          FlorisImeServiceReference = WeakReference(this)
-@@ -288,6 +300,18 @@ class FlorisImeService : LifecycleInputMethodService() {
+@@ -288,6 +301,24 @@ class FlorisImeService : LifecycleInputMethodService() {
          }
          @Suppress("DEPRECATION") // We do not retrieve the wallpaper but only listen to changes
          registerReceiver(wallpaperChangeReceiver, IntentFilter(Intent.ACTION_WALLPAPER_CHANGED))
@@ -85,18 +119,24 @@ index a090117..1d3bfad 100644
 +        clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 +        clipboardManager.addPrimaryClipChangedListener(listener)
 +
-+        MPClipboard.reconfigure(this, "android-florisboard-ime")
++        val context = this
++        MPClipboard.reconfigure(context, "android-florisboard-ime")
 +        MPClipboard.startPolling(
-+            onConnectivityChanged = {},
++            onConnectivityChanged = { connected ->
++                ConnectivityWidget.update(context, connected)
++            },
 +            onClipboardChanged = { text ->
 +                flogInfo { "New text from server: $text" }
 +                clipboardManager.setPrimaryClip(ClipData.newPlainText("label", text))
 +            }
 +        )
++
++        println("FlorisConnectivityWidget about to do initial set with 'false'")
++        ConnectivityWidget.update(context, false)
      }
  
      override fun onCreateInputView(): View {
-@@ -329,6 +353,10 @@ class FlorisImeService : LifecycleInputMethodService() {
+@@ -329,6 +360,10 @@ class FlorisImeService : LifecycleInputMethodService() {
          unregisterReceiver(wallpaperChangeReceiver)
          FlorisImeServiceReference = WeakReference(null)
          inputWindowView = null
@@ -178,15 +218,40 @@ index 0000000..3530542
 +        SettingsScreen()
 +    }
 +}
+diff --git a/app/src/main/res/layout/placeholder.xml b/app/src/main/res/layout/placeholder.xml
+new file mode 100644
+index 0000000..8a22dfc
+--- /dev/null
++++ b/app/src/main/res/layout/placeholder.xml
+@@ -0,0 +1,5 @@
++<?xml version="1.0" encoding="utf-8"?>
++<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
++    android:layout_width="1dp"
++    android:layout_height="1dp" />
++
+diff --git a/app/src/main/res/xml/connectivity_widget_info.xml b/app/src/main/res/xml/connectivity_widget_info.xml
+new file mode 100644
+index 0000000..3842395
+--- /dev/null
++++ b/app/src/main/res/xml/connectivity_widget_info.xml
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="utf-8"?>
++<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
++    android:initialLayout="@layout/placeholder"
++    android:minWidth="110dp"
++    android:minHeight="50dp"
++    android:updatePeriodMillis="0"
++    android:widgetCategory="home_screen" />
++
 diff --git a/gradle/libs.versions.toml b/gradle/libs.versions.toml
-index 1336835..cb7a695 100644
+index 1336835..f0c2439 100644
 --- a/gradle/libs.versions.toml
 +++ b/gradle/libs.versions.toml
 @@ -21,6 +21,7 @@ kotlinx-serialization-json = "1.6.3"
  ksp = "2.0.20-1.0.25"
  mannodermaus-android-junit5 = "1.10.0.0"
  mikepenz-aboutlibraries = "10.10.0"
-+mpclipboard-android = "0.1.0"
++mpclipboard-android = "0.2.0"
  patrickgold-compose-tooltip = "0.1.0"
  patrickgold-jetpref = "0.2.0-rc01"
  

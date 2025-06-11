@@ -16,7 +16,7 @@ jobs:
           distribution: 'temurin'
 
       - run: git clone --depth 1 --branch ${{ github.ref_name }} https://github.com/florisboard/florisboard.git
-      - run: cd florisboard && git apply ../0001-add-shared-clipboard-integration.patch
+      - run: cd florisboard && git apply ../0001-integrate-mpclipboard.patch
       - run: cd florisboard && ./gradlew assembleDebug
 
       - uses: ncipollo/release-action@v1
