@@ -1,4 +1,4 @@
-tag := "v0.4.6"
+tag := "v0.5.0-alpha04"
 
 push:
     git push --force
